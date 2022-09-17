@@ -39,18 +39,18 @@ def _parser(serialized_example):
       the lighting condition (0 to 5)
   """
 
-  features = tf.parse_single_example(
-    serialized_example, 
+  features = tf.io.parse_single_example(
+    serialized=serialized_example, 
     features={
-      'img_raw': tf.FixedLenFeature([], tf.string),
-      'label': tf.FixedLenFeature([], tf.int64),
-      'category': tf.FixedLenFeature([], tf.int64), 
-      'elevation': tf.FixedLenFeature([], tf.int64), 
-      'azimuth': tf.FixedLenFeature([], tf.int64), 
-      'lighting': tf.FixedLenFeature([], tf.int64),
+      'img_raw': tf.io.FixedLenFeature([], tf.string),
+      'label': tf.io.FixedLenFeature([], tf.int64),
+      'category': tf.io.FixedLenFeature([], tf.int64), 
+      'elevation': tf.io.FixedLenFeature([], tf.int64), 
+      'azimuth': tf.io.FixedLenFeature([], tf.int64), 
+      'lighting': tf.io.FixedLenFeature([], tf.int64),
      })
 
-  img = tf.decode_raw(features['img_raw'], tf.float64)
+  img = tf.io.decode_raw(features['img_raw'], tf.float64)
   img = tf.reshape(img, [96, 96, 1])
   img = tf.cast(img, tf.float32)  # * (1. / 255) # left unnormalized
 
@@ -84,9 +84,9 @@ def _train_preprocess(img, lab, cat, elv, azi, lit):
   """
   
   img = img / 255.
-  img = tf.image.resize_images(img, [48, 48])
+  img = tf.image.resize(img, [48, 48])
   img = tf.image.per_image_standardization(img)
-  img = tf.random_crop(img, [32, 32, 1])
+  img = tf.image.random_crop(img, [32, 32, 1])
   img = tf.image.random_brightness(img, max_delta = 2.0)
   #original 0.5, 1.5
   img = tf.image.random_contrast(img, lower=0.5, upper=1.5) 
@@ -121,7 +121,7 @@ def _val_preprocess(img, lab, cat, elv, azi, lit):
   """
   
   img = img / 255.
-  img = tf.image.resize_images(img, [48, 48])
+  img = tf.image.resize(img, [48, 48])
   img = tf.image.per_image_standardization(img)
   img = tf.slice(img, [8, 8, 0], [32, 32, 1])
   
@@ -204,7 +204,7 @@ def create_inputs_norb(path, is_train: bool):
   dataset = input_fn(path, is_train)
   
   # Create one-shot iterator
-  iterator = dataset.make_one_shot_iterator()
+  iterator = tf.compat.v1.data.make_one_shot_iterator(dataset)
   
   img, lab, cat, elv, azi, lit = iterator.get_next()
   
@@ -246,7 +246,7 @@ def plot_smallnorb(is_train=True, samples_per_class=5):
   # Get batch from data queue. Batch size is FLAGS.batch_size, which is then 
   # divided across multiple GPUs
   input_dict = create_inputs_norb(path, is_train=is_train)
-  with tf.Session() as sess:
+  with tf.compat.v1.Session() as sess:
     input_dict = sess.run(input_dict)
     
   img_bch = input_dict['image']

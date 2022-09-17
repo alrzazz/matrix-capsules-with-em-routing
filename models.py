@@ -6,7 +6,7 @@ E-mail: ashley.gritzman@za.ibm.com
 
 # Public modules
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
+import tf_slim as slim
 import numpy as np
 
 # My modules
@@ -33,7 +33,7 @@ def build_arch_smallnorb(input, is_train: bool, num_classes: int):
   # initializer = tf.truncated_normal_initializer(mean=0.0, stddev=0.01)
   # instead of initializing bias with constant 0, a truncated normal 
   # initializer is exploited here for higher stability
-  bias_initializer = tf.truncated_normal_initializer(mean=0.0, stddev=0.01) 
+  bias_initializer = tf.compat.v1.truncated_normal_initializer(mean=0.0, stddev=0.01) 
 
   # AG 13/11/2018
   # In response to a question on OpenReview, Hinton et al. wrote the 
@@ -41,7 +41,7 @@ def build_arch_smallnorb(input, is_train: bool, num_classes: int):
   # "We use a weight decay loss with a small factor of .0000002 rather than 
   # the reconstruction loss."
   # https://openreview.net/forum?id=HJWLfGWRb&noteId=rJeQnSsE3X
-  weights_regularizer = tf.contrib.layers.l2_regularizer(0.0000002)
+  weights_regularizer = tf.keras.regularizers.l2(0.5 * (0.0000002))
 
   # weights_initializer=initializer,
   with slim.arg_scope([slim.conv2d], 
@@ -57,7 +57,7 @@ def build_arch_smallnorb(input, is_train: bool, num_classes: int):
         trainable=is_train)
     
     #----- Convolutional Layer 1 -----#
-    with tf.variable_scope('relu_conv1') as scope:
+    with tf.compat.v1.variable_scope('relu_conv1') as scope:
       output = slim.conv2d(output, 
       num_outputs=FLAGS.A, 
       kernel_size=[5, 5], 
@@ -72,7 +72,7 @@ def build_arch_smallnorb(input, is_train: bool, num_classes: int):
       logger.info('relu_conv1 output shape: {}'.format(output.get_shape()))
     
     #----- Primary Capsules -----#
-    with tf.variable_scope('primary_caps') as scope:
+    with tf.compat.v1.variable_scope('primary_caps') as scope:
       pose = slim.conv2d(output, 
       num_outputs=FLAGS.B * 16, 
       kernel_size=[1, 1], 
@@ -105,7 +105,7 @@ def build_arch_smallnorb(input, is_train: bool, num_classes: int):
       logger.info('primary_caps activation shape {}'
                   .format(activation.get_shape()))
       
-      tf.summary.histogram("activation", activation)
+      tf.compat.v1.summary.histogram("activation", activation)
     
     #----- Conv Caps 1 -----#
     # activation_in: (64, 7, 7, 8, 1) 
@@ -184,12 +184,12 @@ def build_arch_baseline(input, is_train: bool, num_classes: int):
       (scalar)
   """
 
-  bias_initializer = tf.truncated_normal_initializer(
+  bias_initializer = tf.compat.v1.truncated_normal_initializer(
       mean=0.0, stddev=0.01)
   
   # The paper didnot mention any regularization, a common l2 regularizer to 
   # weights is added here
-  weights_regularizer = tf.contrib.layers.l2_regularizer(5e-04)
+  weights_regularizer = tf.keras.regularizers.l2(0.5 * (5e-04))
 
   logger.info('input shape: {}'.format(input.get_shape()))
 
@@ -200,7 +200,7 @@ def build_arch_baseline(input, is_train: bool, num_classes: int):
     weights_regularizer=weights_regularizer):
     
     #----- Conv1 -----#
-    with tf.variable_scope('relu_conv1') as scope:
+    with tf.compat.v1.variable_scope('relu_conv1') as scope:
       output = slim.conv2d(
           input, 
           num_outputs=32, 
@@ -213,7 +213,7 @@ def build_arch_baseline(input, is_train: bool, num_classes: int):
       logger.info('output shape: {}'.format(output.get_shape()))
   
     #----- Conv2 -----#
-    with tf.variable_scope('relu_conv2') as scope:
+    with tf.compat.v1.variable_scope('relu_conv2') as scope:
       output = slim.conv2d(
           output, 
           num_outputs=64, 
@@ -278,7 +278,7 @@ def spread_loss(scores, y):
       (scalar)
   """
   
-  with tf.variable_scope('spread_loss') as scope:
+  with tf.compat.v1.variable_scope('spread_loss') as scope:
     batch_size = int(scores.get_shape()[0])
 
     # AG 17/09/2018: modified margin schedule based on response of authors to 
@@ -287,7 +287,7 @@ def spread_loss(scores, y):
     # "The margin that we set is: 
     # margin = 0.2 + .79 * tf.sigmoid(tf.minimum(10.0, step / 50000.0 - 4))
     # where step is the training step. We trained with batch size of 64."
-    global_step = tf.to_float(tf.train.get_global_step())
+    global_step = tf.cast(tf.compat.v1.train.get_global_step(), dtype=tf.float32)
     m_min = 0.2
     m_delta = 0.79
     m = (m_min 
@@ -314,7 +314,7 @@ def spread_loss(scores, y):
     loss = tf.matmul(loss, 1. - y)
     
     # Compute mean
-    loss = tf.reduce_mean(loss)
+    loss = tf.reduce_mean(input_tensor=loss)
 
   return loss
 
@@ -336,8 +336,8 @@ def cross_ent_loss(logits, y):
       mean loss for entire batch
       (scalar)
   """
-  loss = tf.losses.sparse_softmax_cross_entropy(labels=y, logits=logits)
-  loss = tf.reduce_mean(loss)
+  loss = tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=logits)
+  loss = tf.reduce_mean(input_tensor=loss)
 
   return loss
 
@@ -367,21 +367,21 @@ def total_loss(scores, y):
       (scalar)
   """
   
-  with tf.variable_scope('total_loss') as scope:
+  with tf.compat.v1.variable_scope('total_loss') as scope:
     # spread loss
     sprd_loss = spread_loss(scores, y)
 
     if FLAGS.weight_reg:
       # Regularization
-      regularization = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+      regularization = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.REGULARIZATION_LOSSES)
       reg_loss = tf.add_n(regularization)
       total_loss = sprd_loss + reg_loss
-      tf.summary.scalar('spread_loss', sprd_loss)
-      tf.summary.scalar('regularization_loss', reg_loss)
+      tf.compat.v1.summary.scalar('spread_loss', sprd_loss)
+      tf.compat.v1.summary.scalar('regularization_loss', reg_loss)
     else:
       # No regularization
       total_loss = sprd_loss
-      tf.summary.scalar('spread_loss', sprd_loss)
+      tf.compat.v1.summary.scalar('spread_loss', sprd_loss)
 
   return total_loss 
 

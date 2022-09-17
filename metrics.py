@@ -20,13 +20,13 @@ def accuracy(logits, labels):
     accuracy: 
   """
     
-  with tf.variable_scope("accuracy") as scope:
+  with tf.compat.v1.variable_scope("accuracy") as scope:
     logits = tf.identity(logits, name="logits")
     labels = tf.identity(labels, name="labels")
     batch_size = int(logits.get_shape()[0])
-    logits_idx = tf.to_int32(tf.argmax(logits, axis=1))
+    logits_idx = tf.cast(tf.argmax(input=logits, axis=1), dtype=tf.int32)
     logits_idx = tf.reshape(logits_idx, shape=(batch_size,))
-    correct_preds = tf.equal(tf.to_int32(labels), logits_idx)
-    accuracy = (tf.reduce_sum(tf.cast(correct_preds, tf.float32)) 
+    correct_preds = tf.equal(tf.cast(labels, dtype=tf.int32), logits_idx)
+    accuracy = (tf.reduce_sum(input_tensor=tf.cast(correct_preds, tf.float32)) 
           / batch_size)
   return accuracy

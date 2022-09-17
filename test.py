@@ -10,7 +10,7 @@ Credits:
 
 import tensorflow as tf
 import os, sys, time
-import tensorflow.contrib.slim as slim
+import tf_slim as slim
 import datetime   # date stamp the log directory
 import shutil     # to remove a directory
 # to sort files in directory by date
@@ -34,7 +34,7 @@ import utils as utl
 def main(args):
   
   # Set reproduciable random seed
-  tf.set_random_seed(1234)
+  tf.compat.v1.set_random_seed(1234)
   
   # Directories
   # Get name
@@ -82,7 +82,7 @@ def main(args):
   g_test = tf.Graph()
   with g_test.as_default():
     # Get global_step
-    global_step = tf.train.get_or_create_global_step()
+    global_step = tf.compat.v1.train.get_or_create_global_step()
 
     num_batches_test = int(dataset_size_test / FLAGS.batch_size)
 
@@ -117,7 +117,7 @@ def main(args):
     reuse_variables = None
     for i in range(FLAGS.num_gpus):
       with tf.device('/gpu:%d' % i):
-        with tf.name_scope('tower_%d' % i) as scope:
+        with tf.compat.v1.name_scope('tower_%d' % i) as scope:
           with slim.arg_scope([slim.variable], device='/cpu:0'):
             loss, logits = tower_fn(
                 build_arch, 
@@ -135,7 +135,7 @@ def main(args):
           tower_logits.append(logits)
           
           # Loss for each tower
-          tf.summary.histogram("test_logits", logits)
+          tf.compat.v1.summary.histogram("test_logits", logits)
     
     # Combine logits from all towers
     logits = tf.concat(tower_logits, axis=0)
@@ -162,21 +162,21 @@ def main(args):
     test_reset = {}
     test_read = {}
     
-    tf.summary.scalar("test_loss", test_loss)
-    tf.summary.scalar("test_acc", test_acc)
+    tf.compat.v1.summary.scalar("test_loss", test_loss)
+    tf.compat.v1.summary.scalar("test_acc", test_acc)
       
     # Saver
-    saver = tf.train.Saver(max_to_keep=None)
+    saver = tf.compat.v1.train.Saver(max_to_keep=None)
     
     # Set summary op
-    test_summary = tf.summary.merge_all()
+    test_summary = tf.compat.v1.summary.merge_all()
     
   
     #--------------------------------------------------------------------------
     # SESSION - TEST
     #--------------------------------------------------------------------------
-    sess_test = tf.Session(
-        config=tf.ConfigProto(allow_soft_placement=True, 
+    sess_test = tf.compat.v1.Session(
+        config=tf.compat.v1.ConfigProto(allow_soft_placement=True, 
                               log_device_placement=False), 
         graph=g_test)
     
@@ -184,7 +184,7 @@ def main(args):
     #sess_test.run(tf.local_variables_initializer())
     #sess_test.run(tf.global_variables_initializer())
 
-    summary_writer = tf.summary.FileWriter(
+    summary_writer = tf.compat.v1.summary.FileWriter(
         test_summary_dir, 
         graph=sess_test.graph)
 
@@ -255,7 +255,7 @@ def main(args):
             + ' avg_loss: {:.4f}'.format(ave_loss))
 
       logger.info("Write Test Summary")
-      summary_test = tf.Summary()
+      summary_test = tf.compat.v1.Summary()
       summary_test.value.add(tag="test_acc", simple_value=ave_acc)
       summary_test.value.add(tag="test_loss", simple_value=ave_loss)
       summary_writer.add_summary(summary_test, ckpt_num)
@@ -293,7 +293,7 @@ def tower_fn(build_arch,
       (64/4=16, 5)
   """
   
-  with tf.variable_scope(tf.get_variable_scope(), reuse=reuse_variables):
+  with tf.compat.v1.variable_scope(tf.compat.v1.get_variable_scope(), reuse=reuse_variables):
     output = build_arch(x, is_train, num_classes=num_classes)
     scores = output['scores']
     
@@ -303,4 +303,4 @@ def tower_fn(build_arch,
       
 
 if __name__ == "__main__":
-  tf.app.run()
+  tf.compat.v1.app.run()

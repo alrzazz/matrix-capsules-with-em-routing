@@ -18,7 +18,7 @@ Credits:
 
 # Public modules
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
+import tf_slim as slim
 import numpy as np
 
 # My modules
@@ -156,7 +156,7 @@ def em_routing(votes_ij, activations_i, batch_size, spatial_routing_matrix):
     name='beta_a', 
     shape=[1, 1, 1, 1, o, 1], 
     dtype=tf.float32, 
-    initializer=tf.truncated_normal_initializer(mean=-1000.0, stddev=500.0))
+    initializer=tf.compat.v1.truncated_normal_initializer(mean=-1000.0, stddev=500.0))
   
   # AG 04/10/2018: using slim.variable to create instead of tf.get_variable so 
   # that they get correctly placed on the CPU instead of GPU in the multi-gpu 
@@ -168,7 +168,7 @@ def em_routing(votes_ij, activations_i, batch_size, spatial_routing_matrix):
     name='beta_v', 
     shape=[1, 1, 1, 1, o, 1], 
     dtype=tf.float32,            
-    initializer=tf.contrib.layers.xavier_initializer(),
+    initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform"),
     regularizer=None)
   """
   beta_a = slim.model_variable(
@@ -179,7 +179,7 @@ def em_routing(votes_ij, activations_i, batch_size, spatial_routing_matrix):
     regularizer=None)
   """
 
-  with tf.variable_scope("em_routing") as scope:
+  with tf.compat.v1.variable_scope("em_routing") as scope:
     # Initialise routing assignments
     # rr (1, 6, 6, 9, 8, 16) 
     #  (1, parent_space, parent_space, kk, child_caps, parent_caps)
@@ -294,13 +294,13 @@ def m_step(rr, votes, activations_i, beta_v, beta_a, inverse_temperature):
       (24, 6, 6, 1, 32, 16)
   """
 
-  with tf.variable_scope("m_step") as scope:
+  with tf.compat.v1.variable_scope("m_step") as scope:
     
     rr_prime = rr * activations_i
     rr_prime = tf.identity(rr_prime, name="rr_prime")
 
     # rr_prime_sum: sum over all input capsule i
-    rr_prime_sum = tf.reduce_sum(rr_prime, 
+    rr_prime_sum = tf.reduce_sum(input_tensor=rr_prime, 
                                  axis=-3, 
                                  keepdims=True, 
                                  name='rr_prime_sum')
@@ -323,11 +323,11 @@ def m_step(rr, votes, activations_i, beta_v, beta_a, inverse_temperature):
     # rr_prime_sum = rr_prime_sum/ratio_child_to_parent
 
     # mean_j: (24, 6, 6, 1, 32, 16)
-    mean_j_numerator = tf.reduce_sum(rr_prime * votes, 
+    mean_j_numerator = tf.reduce_sum(input_tensor=rr_prime * votes, 
                                      axis=-3, 
                                      keepdims=True, 
                                      name="mean_j_numerator")
-    mean_j = tf.div(mean_j_numerator, 
+    mean_j = tf.compat.v1.div(mean_j_numerator, 
                     rr_prime_sum + FLAGS.epsilon, 
                     name="mean_j")
     
@@ -335,11 +335,11 @@ def m_step(rr, votes, activations_i, beta_v, beta_a, inverse_temperature):
     # Use variance instead of standard deviation, because the sqrt seems to 
     # cause NaN gradients during backprop.
     # See original implementation from Suofei below
-    var_j_numerator = tf.reduce_sum(rr_prime * tf.square(votes - mean_j), 
+    var_j_numerator = tf.reduce_sum(input_tensor=rr_prime * tf.square(votes - mean_j), 
                                     axis=-3, 
                                     keepdims=True, 
                                     name="var_j_numerator")
-    var_j = tf.div(var_j_numerator, 
+    var_j = tf.compat.v1.div(var_j_numerator, 
                    rr_prime_sum + FLAGS.epsilon, 
                    name="var_j")
     
@@ -359,7 +359,7 @@ def m_step(rr, votes, activations_i, beta_v, beta_a, inverse_temperature):
     stdv_j = None
     
     ######## layer_norm_factor
-    cost_j_h = (beta_v + 0.5*tf.log(var_j)) * rr_prime_sum * layer_norm_factor
+    cost_j_h = (beta_v + 0.5*tf.math.log(var_j)) * rr_prime_sum * layer_norm_factor
     cost_j_h = tf.identity(cost_j_h, name="cost_j_h")
     
     # ----- END ----- #
@@ -382,7 +382,7 @@ def m_step(rr, votes, activations_i, beta_v, beta_a, inverse_temperature):
     # yg: This is done for numeric stability.
     # It is the relative variance between each channel determined which one 
     # should activate.
-    cost_j = tf.reduce_sum(cost_j_h, axis=-1, keepdims=True, name="cost_j")
+    cost_j = tf.reduce_sum(input_tensor=cost_j_h, axis=-1, keepdims=True, name="cost_j")
     #cost_j_mean = tf.reduce_mean(cost_j, axis=-2, keepdims=True)
     #cost_j_stdv = tf.sqrt(
     #  tf.reduce_sum(
@@ -451,17 +451,17 @@ def e_step(votes_ij, activations_j, mean_j, stdv_j, var_j, spatial_routing_matri
       (64, 6, 6, 9*8, 16, 1)
   """
   
-  with tf.variable_scope("e_step") as scope:
+  with tf.compat.v1.variable_scope("e_step") as scope:
     
     # AG 26/06/2018: changed stdv_j to var_j
     o_p_unit0 = - tf.reduce_sum(
-      tf.square(votes_ij - mean_j, name="num") / (2 * var_j), 
+      input_tensor=tf.square(votes_ij - mean_j, name="num") / (2 * var_j), 
       axis=-1, 
       keepdims=True, 
       name="o_p_unit0")
     
     o_p_unit2 = - 0.5 * tf.reduce_sum(
-      tf.log(2*np.pi * var_j), 
+      input_tensor=tf.math.log(2*np.pi * var_j), 
       axis=-1, 
       keepdims=True, 
       name="o_p_unit2"
@@ -469,7 +469,7 @@ def e_step(votes_ij, activations_j, mean_j, stdv_j, var_j, spatial_routing_matri
 
     # (24, 6, 6, 288, 32, 1)
     o_p = o_p_unit0 + o_p_unit2
-    zz = tf.log(activations_j + FLAGS.epsilon) + o_p
+    zz = tf.math.log(activations_j + FLAGS.epsilon) + o_p
     
     # AG 13/11/2018: New implementation of normalising across parents
     #----- Start -----#
@@ -501,9 +501,9 @@ def e_step(votes_ij, activations_j, mean_j, stdv_j, var_j, spatial_routing_matri
 
     
     # In log space
-    with tf.variable_scope("to_sparse_log") as scope:
+    with tf.compat.v1.variable_scope("to_sparse_log") as scope:
       # Fill the sparse matrix with the smallest value in zz (at least -100)
-      sparse_filler = tf.minimum(tf.reduce_min(zz), -100)
+      sparse_filler = tf.minimum(tf.reduce_min(input_tensor=zz), -100)
 #       sparse_filler = -100
       zz_sparse = utl.to_sparse(
           zz, 
@@ -511,10 +511,10 @@ def e_step(votes_ij, activations_j, mean_j, stdv_j, var_j, spatial_routing_matri
           sparse_filler=sparse_filler)
   
     
-    with tf.variable_scope("softmax_across_parents") as scope:
+    with tf.compat.v1.variable_scope("softmax_across_parents") as scope:
       rr_sparse = utl.softmax_across_parents(zz_sparse, spatial_routing_matrix)
     
-    with tf.variable_scope("to_dense") as scope:
+    with tf.compat.v1.variable_scope("to_dense") as scope:
       rr_dense = utl.to_dense(rr_sparse, spatial_routing_matrix)
       
     rr = tf.reshape(

@@ -58,7 +58,7 @@ def conv_caps(activation_in,
       (64, 5, 5, 32, 16)
   """
   
-  with tf.variable_scope(name) as scope:
+  with tf.compat.v1.variable_scope(name) as scope:
     
     # Get shapes
     shape = pose_in.get_shape().as_list()
@@ -71,7 +71,7 @@ def conv_caps(activation_in,
     parent_caps = ncaps_out
     kernel_2 = int(kernel**2)
     
-    with tf.variable_scope('votes') as scope:
+    with tf.compat.v1.variable_scope('votes') as scope:
       # Tile poses and activations
       # (64, 7, 7, 8, 16)  -> (64, 5, 5, 9, 8, 16)
       pose_tiled, spatial_routing_matrix = utl.kernel_tile(
@@ -103,7 +103,7 @@ def conv_caps(activation_in,
           tag=True)
       logger.info(name + ' votes shape: {}'.format(votes.get_shape()))
 
-    with tf.variable_scope('routing') as scope:
+    with tf.compat.v1.variable_scope('routing') as scope:
       # votes (64*5*5, 9*8, 32, 16)
       # activations (64*5*5, 9*8, 1)
       # pose_out: (N, OH, OW, o, 4x4)
@@ -117,7 +117,7 @@ def conv_caps(activation_in,
     logger.info(name + ' activation_out shape: {}'
                 .format(activation_out.get_shape()))
 
-    tf.summary.histogram(name + "activation_out", activation_out)
+    tf.compat.v1.summary.histogram(name + "activation_out", activation_out)
   
   return activation_out, pose_out
 
@@ -161,7 +161,7 @@ def fc_caps(activation_in,
       (64, 5, 16)
   """
   
-  with tf.variable_scope(name) as scope:
+  with tf.compat.v1.variable_scope(name) as scope:
     
     # Get shapes
     shape = pose_in.get_shape().as_list()
@@ -169,7 +169,7 @@ def fc_caps(activation_in,
     child_space = shape[1]
     child_caps = shape[3]
 
-    with tf.variable_scope('v') as scope:
+    with tf.compat.v1.variable_scope('v') as scope:
       # In the class_caps layer, we apply same multiplication to every spatial 
       # location, so we unroll along the batch and spatial dimensions
       # (64, 5, 5, 32, 16) -> (64*5*5, 32, 16)
@@ -191,7 +191,7 @@ def fc_caps(activation_in,
       logger.info('class_caps votes original shape: {}'
                   .format(votes.get_shape()))
 
-    with tf.variable_scope('coord_add') as scope:
+    with tf.compat.v1.variable_scope('coord_add') as scope:
       # (64*5*5, 32, 5, 16)
       votes = tf.reshape(
           votes, 
@@ -199,7 +199,7 @@ def fc_caps(activation_in,
            votes.shape[-1]])
       votes = coord_addition(votes)
 
-    with tf.variable_scope('routing') as scope:
+    with tf.compat.v1.variable_scope('routing') as scope:
       # Flatten the votes:
       # Combine the 4 x 4 spacial dimensions to appear as one spacial dimension       # with many capsules.
       # [64*5*5, 16, 5, 16] -> [64, 5*5*16, 5, 16]
@@ -228,7 +228,7 @@ def fc_caps(activation_in,
                 .format(activation_out.get_shape()))
     logger.info('class_caps pose shape: {}'.format(pose_out.get_shape()))
 
-    tf.summary.histogram("activation_out", activation_out)
+    tf.compat.v1.summary.histogram("activation_out", activation_out)
       
   return activation_out, pose_out
 

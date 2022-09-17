@@ -5,7 +5,7 @@ E-mail: ashley.gritzman@za.ibm.com
 """
 
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
+import tf_slim as slim
 import numpy as np
 
 
@@ -142,7 +142,7 @@ def compute_votes(poses_i, o, regularizer, tag=False):
   # and votes using weights with bigger stddev helps numerical stability
   w = slim.model_variable('w', shape=[1, kh_kw_i, o, 4, 4], 
                           dtype=tf.float32, 
-                          initializer=tf.truncated_normal_initializer(
+                          initializer=tf.compat.v1.truncated_normal_initializer(
                             mean=0.0, 
                             stddev=1.0), #1.0
                           regularizer=regularizer)
@@ -272,7 +272,7 @@ def init_rr(spatial_routing_matrix, child_caps, parent_caps):
   return rr_initial
 
 
-def to_sparse(probs, spatial_routing_matrix, sparse_filler=tf.log(1e-20)):
+def to_sparse(probs, spatial_routing_matrix, sparse_filler=tf.math.log(1e-20)):
   """Convert probs tensor to sparse along child_space dimension.
   
   Consider a probs tensor of shape (64, 6, 6, 3*3, 32, 16). 
@@ -362,7 +362,7 @@ def to_sparse(probs, spatial_routing_matrix, sparse_filler=tf.log(1e-20)):
   # scatter_nd pads the output with zeros, but since we are operating
   # in log space, we need to replace 0 with log(0), or log(1e-9)
   zeros_in_log = tf.ones_like(sparse, dtype=tf.float32) * sparse_filler
-  sparse = tf.where(tf.equal(sparse, 0.0), zeros_in_log, sparse)
+  sparse = tf.compat.v1.where(tf.equal(sparse, 0.0), zeros_in_log, sparse)
   
   # Reshape
   # (64, 5*5, 7*7, 8, 32) -> (64, 6, 6, 14*14, 8, 32)
@@ -428,7 +428,7 @@ def normalise_across_parents(probs_sparse, spatial_routing_matrix):
   child_caps = shape[4]
   parent_caps = shape[5]
   
-  rr_updated = probs_sparse/(tf.reduce_sum(probs_sparse, 
+  rr_updated = probs_sparse/(tf.reduce_sum(input_tensor=probs_sparse, 
                                            axis=[1,2,5], 
                                            keepdims=True) + 1e-9)
   
@@ -447,9 +447,9 @@ def normalise_across_parents(probs_sparse, spatial_routing_matrix):
   #effective_child_caps = (child_space_2 - dropped_child_caps) * child_caps * 
   # batch_size
   effective_child_caps = (child_space_2 - dropped_child_caps) * child_caps
-  effective_child_caps = tf.to_double(effective_child_caps)
+  effective_child_caps = tf.cast(effective_child_caps, dtype=tf.float64)
   
-  sum_routing_weights = tf.reduce_sum(tf.to_double(rr_updated), 
+  sum_routing_weights = tf.reduce_sum(input_tensor=tf.cast(rr_updated, dtype=tf.float64), 
                                       axis=[1,2,3,4,5])
   
   pct_delta = tf.abs((effective_child_caps - sum_routing_weights) 
@@ -513,7 +513,7 @@ def softmax_across_parents(probs_sparse, spatial_routing_matrix):
   
   # Move parent space dimensions, and parent depth dimension to end
   # (1, 5, 5, 49, 8, 32)  -> (1, 49, 4, 5, 5, 3)
-  sparse = tf.transpose(probs_sparse, perm=[0,3,4,1,2,5])
+  sparse = tf.transpose(a=probs_sparse, perm=[0,3,4,1,2,5])
   
   # Combine parent 
   # (1, 49, 4, 75)
@@ -531,7 +531,7 @@ def softmax_across_parents(probs_sparse, spatial_routing_matrix):
   
   # Return to original order
   # (1, 5, 5, 49, 8, 32)
-  parent_softmax = tf.transpose(parent_softmax, perm=[0,3,4,1,2,5])
+  parent_softmax = tf.transpose(a=parent_softmax, perm=[0,3,4,1,2,5])
   
   # Softmax across the parent capsules actually gives us the updated routing 
   # weights
@@ -549,8 +549,8 @@ def softmax_across_parents(probs_sparse, spatial_routing_matrix):
   # convolution doesn't fit nicely. So in the sparse form of child capsules, the   # dropped capsules will be 0 everywhere. When we do a softmax, these capsules
   # will then be given a value, so when we check the total child capsules we 
   # need to include these. But these will then be excluded when we convert back   # to dense so it's not a problem. 
-  total_child_caps = tf.to_float(child_space_2 * child_caps * batch_size)
-  sum_routing_weights = tf.round(tf.reduce_sum(rr_updated))
+  total_child_caps = tf.cast(child_space_2 * child_caps * batch_size, dtype=tf.float32)
+  sum_routing_weights = tf.round(tf.reduce_sum(input_tensor=rr_updated))
   
 #   assert_op = tf.assert_equal(
 #       sum_routing_weights, 
@@ -613,8 +613,8 @@ def to_dense(sparse, spatial_routing_matrix):
   # sparse_unroll: (64, 5*5, 49, 8, 32)
   # spatial_routing_matrix: (49, 25) -> (25, 49)
   # dense: (64, 5*5, 49, 8, 32) -> (64, 5*5*9, 8, 32)
-  dense = tf.boolean_mask(sparse_unroll, 
-                          tf.transpose(spatial_routing_matrix), axis=1)
+  dense = tf.boolean_mask(tensor=sparse_unroll, 
+                          mask=tf.transpose(a=spatial_routing_matrix), axis=1)
   
   # Reshape
   dense = tf.reshape(dense, [batch_size, parent_space, parent_space, kk, 
@@ -666,7 +666,7 @@ def logits_one_vs_rest(logits, positive_class = 0):
   
   logits_rest = tf.concat([logits[:,:positive_class], 
                            logits[:,(positive_class+1):]], axis=1)
-  logits_rest_max = tf.reduce_max(logits_rest, axis=1, keepdims=True)
+  logits_rest_max = tf.reduce_max(input_tensor=logits_rest, axis=1, keepdims=True)
 
   logits_one_vs_rest = tf.concat([logits_positive, logits_rest_max], axis=1)
   

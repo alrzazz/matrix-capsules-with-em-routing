@@ -6,7 +6,7 @@ E-mail: ashley.gritzman@za.ibm.com
 
 # Public modules
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
+import tf_slim as slim
 from tensorflow.python import debug as tf_debug # for debugging
 import numpy as np
 
@@ -47,7 +47,7 @@ def main(args):
   """
   
   # Set reproduciable random seed
-  tf.set_random_seed(1234)
+  tf.compat.v1.set_random_seed(1234)
     
   # Directories
   train_dir, train_summary_dir = conf.setup_train_directories()
@@ -80,7 +80,7 @@ def main(args):
   with g_train.as_default(), tf.device('/cpu:0'):
     
     # Get global_step
-    global_step = tf.train.get_or_create_global_step()
+    global_step = tf.compat.v1.train.get_or_create_global_step()
 
     # Get batches per epoch
     num_batches_per_epoch = int(dataset_size_train / FLAGS.batch_size)
@@ -89,12 +89,12 @@ def main(args):
     # following:
     # "We use an exponential decay with learning rate: 3e-3, decay_steps: 20000,     # decay rate: 0.96."
     # https://openreview.net/forum?id=HJWLfGWRb&noteId=ryxTPFDe2X
-    lrn_rate = tf.train.exponential_decay(learning_rate = FLAGS.lrn_rate, 
+    lrn_rate = tf.compat.v1.train.exponential_decay(learning_rate = FLAGS.lrn_rate, 
                         global_step = global_step, 
                         decay_steps = 20000, 
                         decay_rate = 0.96)
-    tf.summary.scalar('learning_rate', lrn_rate)
-    opt = tf.train.AdamOptimizer(learning_rate=lrn_rate)
+    tf.compat.v1.summary.scalar('learning_rate', lrn_rate)
+    opt = tf.compat.v1.train.AdamOptimizer(learning_rate=lrn_rate)
 
     # Get batch from data queue. Batch size is FLAGS.batch_size, which is then 
     # divided across multiple GPUs
@@ -126,7 +126,7 @@ def main(args):
     reuse_variables = None
     for i in range(FLAGS.num_gpus):
       with tf.device('/gpu:%d' % i):
-        with tf.name_scope('tower_%d' % i) as scope:
+        with tf.compat.v1.name_scope('tower_%d' % i) as scope:
           logger.info('TOWER %d' % i)
           #with slim.arg_scope([slim.model_variable, slim.variable],
           # device='/cpu:0'):
@@ -154,7 +154,7 @@ def main(args):
           tower_losses.append(loss)
           
           # Loss for each tower
-          tf.summary.scalar("loss", loss)
+          tf.compat.v1.summary.scalar("loss", loss)
     
     # We must calculate the mean of each gradient. Note that this is the
     # synchronization point across all towers.
@@ -162,18 +162,18 @@ def main(args):
     
     # See: https://stackoverflow.com/questions/40701712/how-to-check-nan-in-
     # gradients-in-tensorflow-when-updating
-    grad_check = ([tf.check_numerics(g, message='Gradient NaN Found!') 
+    grad_check = ([tf.debugging.check_numerics(g, message='Gradient NaN Found!') 
                       for g, _ in grad if g is not None] 
-                  + [tf.check_numerics(loss, message='Loss NaN Found')])
+                  + [tf.debugging.check_numerics(loss, message='Loss NaN Found')])
     
     # Apply the gradients to adjust the shared variables
     with tf.control_dependencies(grad_check):
-      update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+      update_ops = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.UPDATE_OPS)
       with tf.control_dependencies(update_ops):
         train_op = opt.apply_gradients(grad, global_step=global_step)
     
     # Calculate mean loss     
-    loss = tf.reduce_mean(tower_losses)
+    loss = tf.reduce_mean(input_tensor=tower_losses)
     
     # Calculate accuracy
     logits = tf.concat(tower_logits, axis=0)
@@ -198,22 +198,22 @@ def main(args):
     trn_read = {}
     
     # Logging
-    tf.summary.scalar('trn_loss', loss)
-    tf.summary.scalar('trn_acc', acc)
+    tf.compat.v1.summary.scalar('trn_loss', loss)
+    tf.compat.v1.summary.scalar('trn_acc', acc)
 
     # Set Saver
     # AG 26/09/2018: Save all variables including Adam so that we can continue 
     # training from where we left off
     # max_to_keep=None should keep all checkpoints
-    saver = tf.train.Saver(tf.global_variables(), max_to_keep=None)
+    saver = tf.compat.v1.train.Saver(tf.compat.v1.global_variables(), max_to_keep=None)
     
     # Display number of parameters
     train_params = np.sum([np.prod(v.get_shape().as_list())
-              for v in tf.trainable_variables()]).astype(np.int32)
+              for v in tf.compat.v1.trainable_variables()]).astype(np.int32)
     logger.info('Trainable Parameters: {}'.format(train_params))
         
     # Set summary op
-    trn_summary = tf.summary.merge_all()
+    trn_summary = tf.compat.v1.summary.merge_all()
     
   
   #----------------------------------------------------------------------------
@@ -223,7 +223,7 @@ def main(args):
   g_val = tf.Graph()
   with g_val.as_default():
     # Get global_step
-    global_step = tf.train.get_or_create_global_step()
+    global_step = tf.compat.v1.train.get_or_create_global_step()
 
     num_batches_val = int(dataset_size_val / FLAGS.batch_size * FLAGS.val_prop)
     
@@ -254,7 +254,7 @@ def main(args):
     reuse_variables = None
     for i in range(FLAGS.num_gpus):
       with tf.device('/gpu:%d' % i):
-        with tf.name_scope('tower_%d' % i) as scope:
+        with tf.compat.v1.name_scope('tower_%d' % i) as scope:
           with slim.arg_scope([slim.variable], device='/cpu:0'):
             loss, logits = tower_fn(
                 build_arch, 
@@ -272,7 +272,7 @@ def main(args):
           tower_logits.append(logits)
           
           # Loss for each tower
-          tf.summary.histogram("val_logits", logits)
+          tf.compat.v1.summary.histogram("val_logits", logits)
     
     # Combine logits from all towers
     logits = tf.concat(tower_logits, axis=0)
@@ -299,14 +299,14 @@ def main(args):
     val_reset = {}
     val_read = {}
     
-    tf.summary.scalar("val_loss", val_loss)
-    tf.summary.scalar("val_acc", val_acc)
+    tf.compat.v1.summary.scalar("val_loss", val_loss)
+    tf.compat.v1.summary.scalar("val_acc", val_acc)
       
     # Saver
-    saver = tf.train.Saver(max_to_keep=None)
+    saver = tf.compat.v1.train.Saver(max_to_keep=None)
     
     # Set summary op
-    val_summary = tf.summary.merge_all()
+    val_summary = tf.compat.v1.summary.merge_all()
      
       
   #****************************************************************************
@@ -315,7 +315,7 @@ def main(args):
           
   #----- SESSION TRAIN -----#
   # Session settings
-  sess_train = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, 
+  sess_train = tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(allow_soft_placement=True, 
                                                 log_device_placement=False), 
                           graph=g_train)
 
@@ -327,8 +327,8 @@ def main(args):
                                                          FLAGS.debugger)
     
   with g_train.as_default():
-    sess_train.run([tf.global_variables_initializer(),
-                    tf.local_variables_initializer()])
+    sess_train.run([tf.compat.v1.global_variables_initializer(),
+                    tf.compat.v1.local_variables_initializer()])
     
     # Restore previous checkpoint
     # AG 26/09/2018: where should this go???
@@ -339,17 +339,18 @@ def main(args):
       prev_step = 0
 
   # Create summary writer, and write the train graph
-  summary_writer = tf.summary.FileWriter(train_summary_dir, 
+  with tf.compat.v1.Graph().as_default():
+	  summary_writer = tf.compat.v1.summary.FileWriter(train_summary_dir, 
                                          graph=sess_train.graph)
 
   
   #----- SESSION VALIDATION -----#
-  sess_val = tf.Session(config=tf.ConfigProto(allow_soft_placement=True,
+  sess_val = tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(allow_soft_placement=True,
                                               log_device_placement=False),
                         graph=g_val)
   with g_val.as_default():
-    sess_val.run([tf.local_variables_initializer(), 
-                  tf.global_variables_initializer()])
+    sess_val.run([tf.compat.v1.local_variables_initializer(), 
+                  tf.compat.v1.global_variables_initializer()])
 
 
   #****************************************************************************
@@ -376,8 +377,8 @@ def main(args):
           # With profiling
           if (FLAGS.profile is True) and ((step % PROFILE_FREQ) == 0): 
             logger.info("Train with Profiling")
-            run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-            run_metadata = tf.RunMetadata()
+            run_options = tf.compat.v1.RunOptions(trace_level=tf.compat.v1.RunOptions.FULL_TRACE)
+            run_metadata = tf.compat.v1.RunMetadata()
           # Without profiling
           else:
             run_options = None
@@ -489,7 +490,7 @@ def main(args):
                      )
           
           logger.info("Write Val Summary")
-          summary_val = tf.Summary()
+          summary_val = tf.compat.v1.Summary()
           summary_val.value.add(tag="val_acc", simple_value=ave_acc)
           summary_val.value.add(tag="val_loss", simple_value=ave_loss)
           summary_writer.add_summary(summary_val, step)
@@ -532,7 +533,7 @@ def tower_fn(build_arch,
       (64/4=16, 5)
   """
   
-  with tf.variable_scope(tf.get_variable_scope(), reuse=reuse_variables):
+  with tf.compat.v1.variable_scope(tf.compat.v1.get_variable_scope(), reuse=reuse_variables):
     output = build_arch(x, is_train, num_classes=num_classes)
     scores = output['scores']
     
@@ -574,7 +575,7 @@ def average_gradients(tower_grads):
 
     # Average over the 'tower' dimension.
     grad = tf.concat(axis=0, values=grads)
-    grad = tf.reduce_mean(grad, 0)
+    grad = tf.reduce_mean(input_tensor=grad, axis=0)
 
     # Keep in mind that the Variables are redundant because they are shared
     # across towers. So .. we will just return the first tower's pointer to
@@ -625,7 +626,7 @@ def load_training(saver, session, load_dir):
     The latest saved step.
   """
   
-  if tf.gfile.Exists(load_dir): 
+  if tf.io.gfile.exists(load_dir): 
     ckpt = tf.train.get_checkpoint_state(load_dir)
     if ckpt and ckpt.model_checkpoint_path:
       saver.restore(session, ckpt.model_checkpoint_path)
@@ -663,4 +664,4 @@ def find_checkpoint(load_dir, seen_step):
           
 
 if __name__ == "__main__":
-  tf.app.run()
+  tf.compat.v1.app.run()

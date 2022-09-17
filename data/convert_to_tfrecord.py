@@ -52,8 +52,8 @@ def convert_to_tfrecord(kind: str, chunkify=False):
     dir_mat = os.path.join(data_store,'smallNORB/mat')
     dir_tfrecords = os.path.join(data_store,'smallNORB/tfrecord/')
    
-    if not tf.gfile.Exists(dir_tfrecords):
-        tf.gfile.MakeDirs(dir_tfrecords)
+    if not tf.io.gfile.exists(dir_tfrecords):
+        tf.io.gfile.makedirs(dir_tfrecords)
     
     #----- READ -----#
     
@@ -129,7 +129,7 @@ def convert_to_tfrecord(kind: str, chunkify=False):
         #----- WRITE -----#
         
         tfrecord_path = dir_tfrecords + kind + "%d.tfrecords" % j
-        writer = tf.python_io.TFRecordWriter(tfrecord_path)
+        writer = tf.io.TFRecordWriter(tfrecord_path)
         for i in range(num_images):
             if i % 100 == 0:
                 logger.info('Write ' + kind + ' images %d' % ((j + 1) * i))
@@ -159,7 +159,7 @@ def convert_to_tfrecord(kind: str, chunkify=False):
     # If not using sharded approach, then should be 48 600 in both train and test tfrecords
     logger.info("Counting...")
     c = 0
-    for record in tf.python_io.tf_record_iterator(tfrecord_path):
+    for record in tf.compat.v1.python_io.tf_record_iterator(tfrecord_path):
         c += 1
     logger.info("Number of records in {} tfrecord: {}".format(kind,c))
 

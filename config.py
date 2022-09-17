@@ -14,7 +14,7 @@ import daiquiri
 import logging
 logger = daiquiri.getLogger(__name__)
 
-flags = tf.app.flags
+flags = tf.compat.v1.app.flags
 
 # Need this line for flags to work with Jupyter
 # https://github.com/tensorflow/tensorflow/issues/17702
@@ -90,24 +90,24 @@ def setup_train_directories():
   
   # Set log directory
   date_stamp = datetime.now().strftime('%Y%m%d')
-  save_dir = os.path.join(tf.app.flags.FLAGS.storage, 'logs/',
-              tf.app.flags.FLAGS.dataset)
+  save_dir = os.path.join(tf.compat.v1.app.flags.FLAGS.storage, 'logs/',
+              tf.compat.v1.app.flags.FLAGS.dataset)
   train_dir = '{}/{}_{}/train'.format(save_dir, date_stamp, FLAGS.name)
 
   # Clear the train log directory
-  if FLAGS.reset is True and tf.gfile.Exists(train_dir):
-    tf.gfile.DeleteRecursively(train_dir)
+  if FLAGS.reset is True and tf.io.gfile.exists(train_dir):
+    tf.io.gfile.rmtree(train_dir)
 
   # Create train directory
-  if not tf.gfile.Exists(train_dir):
-    tf.gfile.MakeDirs(train_dir)
+  if not tf.io.gfile.exists(train_dir):
+    tf.io.gfile.makedirs(train_dir)
 
   # Set summary directory
   train_summary_dir = os.path.join(train_dir, 'summary')
 
   # Create summary directory
-  if not tf.gfile.Exists(train_summary_dir):
-    tf.gfile.MakeDirs(train_summary_dir)
+  if not tf.io.gfile.exists(train_summary_dir):
+    tf.io.gfile.makedirs(train_summary_dir)
     
   return train_dir, train_summary_dir
 
